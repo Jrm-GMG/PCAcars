@@ -1,4 +1,4 @@
-# Project Title
+# PCAcars
 2004 American car data analysis
 
 ## Technologies
