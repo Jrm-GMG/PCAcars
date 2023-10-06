@@ -1,0 +1,245 @@
+---
+title: "PCA on a car features dataset"
+author: "Jérémy GAMANGA"
+output: html_document
+---
+
+We are interested by the dataset cars04 with some car models in 2004 sold in USA. Each car is characterized
+by 11 numeric variables described in Table 1.
+
+## Load data
+```{R}
+cars <- read.csv("cars-2004.csv", header=TRUE)
+head(cars)
+```
+
+
+## Convertion from us system unit to metric system unit
+```{R}
+mpg2kml <- 0.42514 # miles per gallon -> kilometer per liter
+usd2eur <- 0.945 # US dollars -> Euro
+lb2kg <- 0.4535923 # pound -> kilogram
+inch2cm <- 2.54 # inch -> centimeter
+
+cars$Retail <-  usd2eur*cars$Retail
+cars$Dealer <-  usd2eur*cars$Dealer
+
+cars$CityMPG <- mpg2kml*cars$CityMPG
+cars$HighwayMPG <- mpg2kml*cars$HighwayMPG
+
+cars$Weight <- lb2kg * cars$Weight
+
+cars$Wheelbase <- lb2kg * cars$Wheelbase
+cars$Length <- inch2cm * cars$Length
+cars$Width <- inch2cm * cars$Width
+
+```
+
+## Correlation between feature
+```{r}
+cor(cars)
+```
+We can see from the correlation matrix that:
+
+- Retail and Dealer are highly correlated with each other, with a correlation coefficient of 0.999, which is quite consistent, since the selling price (dealer) is based on the recommended price (retail).
+
+- Horsepower correlates very well with Retail and Dealer, with correlation coefficients of 0.835 and 0.832 respectively, showing that the most powerful cars are the most expensive.
+
+- CityMPG and HighWayMPG are strongly correlated with each other, with a correlation coefficient of 0.94, indicating that consumption in the city is strongly linked to that on freeways.
+
+- CityMPG and HighWayMPG are negatively correlated with Weight, which is quite consistent with the fact that the lighter a car is, the less it consumes.
+
+
+```{r}
+?pairs
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr")
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)/1.1
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+par(mar=c(4,4,2,1)-.5)
+pairs(cars, diag.panel=panel.hist, 
+      lower.panel = panel.cor)
+
+```
+
+This graph shows the relationship between the different variables in the "cars" dataset. We can see that:
+
+- The histograms for Retail and Dealer have a skewed distribution to the left, showing that very expensive cars are quite rare.
+
+- The correlation graph between Retail and Dealer is practically linear, as is the graph between CityMPG and HighWayMPG.
+
+- The graphs linking Width, Length, WheelBase and Weight are fairly linear, indicating that these parameters vary in the same direction, which is quite consistent.
+
+Thus, this plot confirms several observations made in the correlation analysis and also provides further information concerning the distribution of these variables across the histograms.
+
+
+## Principal component analysis using stats package
+
+```{R}
+PCA.prcomp <- prcomp(cars, scale=TRUE)
+summary(PCA.prcomp)
+plot(PCA.prcomp, type="l", main ="index of the principal component")
+plot(PCA.prcomp$sdev^2/sum(PCA.prcomp$sdev^2)*100, ylab ="% of variance", main="Percentage of the total variance")
+cumul.sum <- cumsum(PCA.prcomp$sdev^2/sum(PCA.prcomp$sdev^2)*100)
+plot(cumul.sum, type="l", ylab ="cumulative variance", main="Cumulative proportion")
+
+```
+
+The rule of thumb is to take the components that reach a cumulative explained variance of at least 0.75.
+In our case, it's sufficient to take the first two components. Indeed, the first two components have an explained variance of 65% and 17% respectively.
+
+## Analysis
+
+```{R}
+matrix.change.basis <- PCA.prcomp$rotation
+print(matrix.change.basis)
+biplot(PCA.prcomp, col=c("white", "black"), choices = c(1,2))
+```
+
+
+The principal component is positively correlated with CityMPG and HighwayMPG. It is negatively correlated with Retail, Dealer, Engine, Cylinders, Horsepower, Weight, Wheelbase, Length, Width. Apart from these sign differences, the absolute values of each coefficient remain of the same order of magnitude. This first component therefore seems to highlight a negative correlation between car consumption and the rest of the variables. It divides cars into two groups: those that consume little fuel, are inexpensive and small, and those that are relatively expensive, have powerful engines and are large. The first group seems to be city cars that emphasize efficiency and affordability (cheap to buy and run). The second group seems to refer to cars purchased outside this pragmatic logic. For example, sports cars, which are high-consumption vehicles with powerful engines, or SUVs, which are large and have high fuel consumption. Both come at a high price, and are more in line with personal taste than cost-cutting logic.   
+
+The second principal component is uncorrelated with the CityMPG and HighwayMPG variables. It is also uncorrelated with the Engine and Cylinders variables. 
+It is therefore the principal component that fully explains these variables. If we look at these 4 variables, we can see that they reflect the car's fuel consumption and range in conventional use, i.e. for city and freeway travel. 
+This first component could represent cars that consume little and are inexpensive: city cars or entry-level cars. 
+
+the second component is negatively correlated with Retail, Dealer and Horsepower. It is positively correlated with Weight, Wheelbase, Length and Width. Given that these variables have the same sign in the main component, the second component induces a negative correlation between these two groups. The Retail, Dealer, Horsepower group, which carries information on the price of the car (a higher horsepower rating leads to a more expensive vehicle registration document).
+The Weight, Wheelbase, Length and Width group, which provides information on car size.  
+
+
+This second component seems to separate expensive, powerful cars from larger ones. 
+Bearing in mind that we're in the process of separating cars that are already relatively expensive (as the first component has already made an initial separation by price), we can no longer speak of entry-level cars here.
+We are therefore separating cars into two groups: those that are very expensive and powerful, such as sports cars or luxury cars, and cars that are mainly large without being excessively expensive, such as SUVs or MPVs. 
+SUVs or minivans.   
+
+Let's give an ID to each car.
+```{R}
+ID <-seq(1, nrow(cars), 1)
+cars$ID <- ID
+```
+
+Let's display all the data respect to PC1 and PC2. Every star is a data point and only the one corresponding  to the Porsche 911 GT2 get its label displayed. The red vectors correspond to the features representations in the space.
+```{R}
+label <- rep("*", nrow(cars))
+label[cars["Porsche 911 GT2","ID"]] <- " Porsche 911 GT2\n*"
+biplot(PCA.prcomp, expand=1000,cex=c(1.1,1), xlabs=label,ylim=c(-0.5,0.2), xlim=c(-0.2,0.2))
+```
+
+We can see, for example, that the Porche 991 GT2 has a negative PC2 component, which is consistent with the fact that it is very expensive, very powerful and small in size (compared to an SUV). 
+
+```{R}
+label <- rep("*", nrow(cars))
+label[cars["Nissan Quest S","ID"]] <- " Nissan Quest S\n*"
+biplot(PCA.prcomp, ylim=c(0.08,0.11), xlim=c(-0.15,0.05), cex= c(0.6, 1),  xlabs=label)
+```
+
+We can see, for example, that the Nissan Quest S (it's an MPV) has a positive PC2 component, which is consistent with the fact that it's large and not particularly powerful, and has a low knock compared with sports cars or luxury cars.
+
+
+```{R}
+label <- rep("*", nrow(cars))
+label[cars["Volkswagen Jetta GLS","ID"]] <- "Volkswagen Jetta GLS\n*"
+biplot(PCA.prcomp, ylim=c(-0.01,0.01), xlim=c(0,0.15), cex= c(0.6, 1), xlabs=label)
+cars[c("Volkswagen Jetta GLS"),]
+print("Prix de vente")
+summary(cars$Dealer)
+print("Consommation en ville")
+summary(cars$CityMPG)
+print("Consommation sur autoroute")
+summary(cars$HighwayMPG)
+```
+
+For example, the Volkswagen Jetta GLS has one of the highest PC1 components, which is consistent with its description on Wikipedia as a "compact car/small family car". This is an inexpensive car designed for everyday use and destined to cost little to run (a car that consumes little). 
+If we compare these data with those of the rest of the cars on the market, we have that: \\
+- a price well below the median selling price. \\
+- a range in the city and on the freeway that's in the 3rd quantile.
+
+## Principal component analysis using FactoMiner package
+
+```{r}
+library(FactoMineR)
+cars.PCA <- PCA(cars, scale.unit = TRUE)
+summary(cars.PCA)
+```
+
+summary() provides us with all the information we were able to gather in the previous section.
+
+The 1st output of summary() gives information on the eigenvalues of the correlation matrix, which represent the amount of variance explained by each principal component.
+First of all, we can see that the eigenvalues found are the same: this function displays them directly where previous methods displayed their roots ($\sqrt{7.105} \approx 2.6655$, $\sqrt{1.884} \approx 1.3726$, ... ).
+So the principal components are the same.
+
+
+We can see that the first two components explain a large proportion of the total variance ($64.588\%$ and $17.127\%$ respectively) for a cumulative percentage of $81.714\%$, while the other components explain less than $8%$ each.
+We then have the same result as before, with the first two principal components explaining more than $75\%$ of the information.
+
+We note that the signs of the coefficients of the vectors in the base are different, but the whole remains coherent, as those that were negative are positive and vice versa. Thus, the directions remain the same, only the direction of the vectors changes, which is of no importance for our analyses.
+
+If we leave aside the signs of the coefficients and look at their absolute values, the values of the basis vectors are different between the functions $PCA()$ and $prcomp()$, since the latter returns the eigenvectors of norm $1$, and $PCA()$ these same eigenvectors multiplied by the root of the associated eigenvalues. If we take the first eigenvector and multiply its components by $\sqrt{7.105} \approx 2.6655$ , we get $0.2637504 \times 2.6655 = 0.7030266912$, $0.2623186 \times 2.6655 = 0.6992102283$, ... . These are called "loadings". Here again, we're just talking about vector dilation, which doesn't change our interpretations. 
+
+As proof, let's reanalyze the principal components:
+
+For the 1st component : 
+negatively correlated with CityMPG and HighWayMPG and positively correlated with all other variables. Once again, the first component separates cars with low fuel consumption, low cost and/or small engine size from cars with high cost, large engine size and/or powerful engine. The same two groups are formed. 
+
+The second component is uncorrelated with CityMPG and HighWayMPG, and only weakly correlated with Engine. This means that it is the first component that explains most of these three variables, as in our first analysis. As in the first case, Cylinders is poorly correlated with the second component compared to the first. It is positively correlated with Weight, WheelBase and Weight, and negatively correlated with Retail, Dealer and Horsepower. The same two groups are thus formed.
+
+In the end, the analysis is the same. 
+
+
+
+```{r}
+dimdesc(cars.PCA)
+```
+
+On the other hand, $dimdesc()$ confirms the results and interpretations from $summary()$, since the p-values of the two coefficients of the two principal component director vectors are very low, even negligible. We are therefore confident in their value. 
+
+
+# Localization of data respect to PC1 and PC2
+
+```{r}
+plot(cars.PCA$ind$coord[,1], cars.PCA$ind$coord[,2], xlab=paste0("PC1"), ylab=paste0("PC2"), main="PCA: individuals")
+```
+
+The graph shows the distribution of individuals defined by the first two components. Each point represents a car model. It can be seen that there is some clustering of car models in certain areas of the graph. 
+
+Cars on the right have high values for the 1st component, which is positively correlated with Engine, Cylinders, Horsepower, Weight, Wheelbase, Width and Length, and negatively correlated with CityMPG and HighWayMPG. This shows that these cars have a bigger engine, with more cylinders, more power, and are heavier, longer and wider. On the other hand, they are less fuel-efficient and more expensive. On the right, we have cars considered to be luxurious and high-performance, or large vehicles (SUVs and minivans). The bottom right-hand corner shows luxury and high-performance cars, which have a negative PC2 coefficient, so their PC2 component is positively correlated with parameters relating to powerful engines and high prices. At the top right, we'll see SUV-type cars with large body sizes, since they have a positive PC2 coefficient, so their PC2 component will be positively correlated with parameters relating to large body size cars, and negatively correlated with parameters relating to powerful engines. 
+
+Cars on the left have a positive PC2 component, which is positively correlated with CityMPG, HighWayMPG, Engine, Weight, WheelBase and Weight, and negatively correlated with Retail, Dealer, Cylinders and Horsepower. This shows that these cars have fewer cylinders and less power, but are more fuel-efficient and larger in size. They can therefore be considered as fuel-efficient, medium-performance cars, such as minivans or other large family cars. Those with a negative PC2 component are more likely to be city cars. 
+
+In general, we can see that there are few cars with a positive PC1 and negative PC2 component, which is logical because these are the luxury cars, so there's less of a market for them than for more classic cars. 
+
+We can see that there are many cars with a negative PC1 component, with a slight advantage for those with a positive PC2 component. So there's a big market for city cars and family cars. 
+
+
+# Analysis
+```{R}
+my3car <- c("Audi RS 6", "Ford Expedition 4.6 XLT", "Nissan Sentra 1.8")
+cars.PCA$ind$contrib[my3car,]
+cars[my3car,]
+```
+
+For Audi RS 6 and Ford Expedition 4.6 XLT, their PC1 and PC2 components are positive.
+The value of their PC1 component is of the same order of magnitude as their PC2 component.
+Both cars are high-consumption, high-cylinder, high-capacity engines.
+However, the value of the first PC2 component of the Audi RS 6 is greater than that of the Ford Expedition 4.6 XLT, so the Audi RS 6 is more expensive than the Ford Expedition 4.6 XLT but has better fuel consumption than the latter. Selecting the $cars$ data, we can see that this is true (the Audi RS 6's fuel consumption is higher on freeways, while city consumption is similar).
+
+With a larger PC2 component for the Audi RS 6 than for the Ford Expedition 4.6 XLT, the Audi must be closer to a sports or luxury car, and the Ford to a large car. The Audi RS 6 is classified as a luxury car by Wikipedia, and it's also a sports (performance-oriented) car. The Ford is indeed a large vehicle.
+
+
+
+
